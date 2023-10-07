@@ -2,6 +2,7 @@
 #define HDMLP_STAGINGBUFFERPREFETCHER_H
 
 #include <deque>
+#include <condition_variable>
 #include "../utils/Sampler.h"
 #include "PrefetcherBackend.h"
 #include "../utils/MetadataStore.h"
