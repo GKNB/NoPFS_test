@@ -2,7 +2,6 @@
 #define HDMLP_STAGINGBUFFERPREFETCHER_H
 
 #include <deque>
-#include <condition_variable>
 #include "../utils/Sampler.h"
 #include "PrefetcherBackend.h"
 #include "../utils/MetadataStore.h"
@@ -17,7 +16,7 @@ public:
                             Sampler* sampler, StorageBackend* backend, PrefetcherBackend** pf_backends,
                             MetadataStore* metadata_store, DistributedManager* distr_manager,
                             TransformPipeline** transform_pipeline, int transform_output_size, Metrics* metrics,
-                            bool collate_data);
+                            bool collate_data, int eviction_policy);
 
     ~StagingBufferPrefetcher();
 
@@ -63,6 +62,8 @@ private:
     int transform_output_size;
 
     void fetch(int file_id, char* dst, int thread_id);
+
+    int eviction_policy;
 };
 
 

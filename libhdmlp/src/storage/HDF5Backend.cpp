@@ -123,7 +123,8 @@ void HDF5Backend::init_mappings(int node_id) {
             fi.num_elems_label = label_size;
             file_metadata.emplace_back(fi);
             if (cache_labels) {
-              std::vector<float> label_data(4);
+              // std::vector<float> label_data(4);
+              std::vector<float> label_data(fi.num_elems_label);
               H5::DataSpace memspace(label_rank, label_dims);
               label.read(label_data.data(), H5::PredType::NATIVE_FLOAT,
                          memspace, label_dataspace);
@@ -138,7 +139,7 @@ void HDF5Backend::init_mappings(int node_id) {
     );
     std::ofstream checkpoint_stream;
     if (checkpoint && node_id == 0) {
-      std::cout << "Saving HDF5 metadata" << std::endl;
+      // std::cout << "Saving HDF5 metadata" << std::endl;
       checkpoint_stream.open(checkpoint_path + "/hdmlp_metadata_",
                              std::ofstream::out | std::ofstream::trunc);
       // Save sample and label element sizes.

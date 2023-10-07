@@ -30,6 +30,8 @@ public:
 
   int get_planned_storage_level(int file_id);
 
+  void rm_cached_file(int file_id);
+
 private:
   std::unordered_map<int, int> planned_file_locations;
     std::unordered_map<int, int> file_locations;

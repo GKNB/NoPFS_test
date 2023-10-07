@@ -8,7 +8,7 @@ StagingBufferPrefetcher::StagingBufferPrefetcher(char* staging_buffer, unsigned 
                                                  Sampler* sampler, StorageBackend* backend, PrefetcherBackend** pf_backends,
                                                  MetadataStore* metadata_store, DistributedManager* distr_manager,
                                                  TransformPipeline** transform_pipeline, int transform_output_size, Metrics* metrics,
-                                                 bool collate_data) {
+                                                 bool collate_data, int eviction_policy) {
     this->buffer_size = buffer_size;
     this->staging_buffer = staging_buffer;
     this->node_id = node_id;
@@ -20,10 +20,12 @@ StagingBufferPrefetcher::StagingBufferPrefetcher(char* staging_buffer, unsigned 
     this->distr_manager = distr_manager;
     this->transform_pipeline = transform_pipeline;
     this->metrics = metrics;
+    // printf("node_id %d starts init\n", node_id);
     if (transform_pipeline != nullptr || collate_data) {
         batch_size = sampler->get_node_local_batch_size();
         unsigned long max_file_size = 0;
         for (int i = 0; i < backend->get_length(); i++) {
+            // get sample size
             unsigned long size = backend->get_file_size(i);
             int label_size = backend->get_label_size(i) + 1;
             if (size > max_file_size) {
@@ -33,6 +35,7 @@ StagingBufferPrefetcher::StagingBufferPrefetcher(char* staging_buffer, unsigned 
                 largest_label_size = label_size;
             }
         }
+        // printf("node_id %d get %f %f\n", node_id, max_file_size, largest_label_size);
         if (transform_pipeline != nullptr) {
           transform_buffers = new char*[no_threads];
           for (int i = 0; i < no_threads; i++) {
@@ -41,8 +44,12 @@ StagingBufferPrefetcher::StagingBufferPrefetcher(char* staging_buffer, unsigned 
           this->transform_output_size = transform_output_size;
         }
     }
+    // printf("node_id %d bf collate\n", node_id);
     this->collate_data = collate_data;
     global_iter_done = new bool[no_threads]();
+
+    this->eviction_policy = eviction_policy;
+    // printf("node_id %d sbf init done\n", node_id);
 }
 
 StagingBufferPrefetcher::~StagingBufferPrefetcher() {
@@ -59,7 +66,13 @@ StagingBufferPrefetcher::~StagingBufferPrefetcher() {
 void StagingBufferPrefetcher::prefetch(int thread_id) {
     while (true) {
         std::vector<int> curr_access_string;
+        // printf("node_id %d call sbf - prefetch\n");
         sampler->get_node_access_string(node_id, curr_access_string);
+        // std::cout << "rank " << node_id << "access_string: "; 
+        // for (auto elem : curr_access_string)
+        //     std::cout << elem << " ";
+        // std::cout << std::endl;
+        // access string of one epoch of current process
         int access_string_size = curr_access_string.size();
         int inserted_until = 0;
         bool do_transform = transform_pipeline != nullptr;
@@ -87,6 +100,9 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
             unsigned long file_size = backend->get_file_size(file_id);
             int label_size = backend->get_label_size(file_id);
             unsigned long entry_size = file_size + label_size + 1;
+            // read_offset -- where to read next
+            // staging_buffer_pointer -- where to write next?
+            // batch_offset -- the no. of this sample in the current batch
             if (do_transform) {
                 // Batch mode, i.e. we fetch batch_size consecutive labels / samples
                 entry_size = transform_output_size + label_size + 1;
@@ -103,6 +119,7 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
             } else if (collate_data) {
               // Batch mode without transforming.
               if (j % batch_size == 0) {
+                // if without drop-last, last batch might be smalller
                 curr_batch_size = std::min(access_string_size - j, batch_size);
                 while (staging_buffer_pointer < read_offset
                        && staging_buffer_pointer + curr_batch_size*(file_size + largest_label_size) >= read_offset) {
@@ -117,7 +134,7 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
                     read_offset_cond_var.wait(crit_section_lock);
                 }
             }
-
+            // move the staging_buffer_pointer first before fetching
             unsigned long long int local_staging_buffer_pointer;
             int batch_offset = 0;
             if (do_transform) {
@@ -187,7 +204,9 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
                       staging_buffer + local_staging_buffer_pointer + curr_local_batch_size*largest_label_size + batch_offset*file_size,
                       thread_id);
               } else {
+                std::cout << "sbf - file_id " << file_id << " before fetch" << std::endl;
                 fetch(file_id, staging_buffer + local_staging_buffer_pointer + label_size + 1, thread_id);
+                std::cout << "sbf - file_id " << file_id << " fetch done" << std::endl;
               }
             } else {
                 fetch(file_id, transform_buffers[thread_id], thread_id);
@@ -200,8 +219,10 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
                     t2 = std::chrono::high_resolution_clock::now();
                     metrics->augmentation_time[thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
                 }
+                // std::cout << "sbf - file_id " << file_id << " transform done" << std::endl;
             }
             std::unique_lock<std::mutex> staging_buffer_lock(staging_buffer_mutex);
+            // std::cout << "sbf - file_id " << file_id << " get staging_buffer_lock" << std::endl;
             // Check if all the previous file ends were inserted to the queue. If not, don't insert, but only set
             // curr_iter_file_ends / curr_iter_file_ends_ready s.t. another thread will insert it
             if (!do_transform) {
@@ -262,6 +283,8 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
             batch_advancement_cond_var.wait(crit_section_lock);
         }
 
+        // std::cout << "sbf get crit_section_lock prefetch_batch " << prefetch_batch << std::endl;
+
         if (prefetch_batch >= sampler->epochs) {
             break;
         }
@@ -277,23 +300,26 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
     int local_storage_level = metadata_store->get_storage_level(file_id);
     int option_order[3];
     metadata_store->get_option_order(local_storage_level, remote_storage_level, option_order);
+    std::cout << "sbf -- file_id " << file_id << " get rml " << remote_storage_level << " get lol " << local_storage_level << std::endl;
     if (profiling) {
         t1 = std::chrono::high_resolution_clock::now();
     }
-    if (option_order[0] == OPTION_REMOTE) {
-        if (distr_manager->fetch(file_id, dst, thread_id)) {
-            if (profiling) {
-                t2 = std::chrono::high_resolution_clock::now();
-                metrics->read_locations[0][thread_id].emplace_back(OPTION_REMOTE);
-                metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
-            }
-            return;
-        } else if (profiling) {
-            // Track unsuccesful remote fetches as well
-            metrics->read_locations[0][thread_id].emplace_back(-1);
-            metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
-        }
-    }
+    // if (option_order[0] == OPTION_REMOTE) {
+    //     // fetch remotely
+    //     // MPI_SEND request and call MPI_RECV
+    //     if (distr_manager->fetch(file_id, dst, thread_id)) {
+    //         if (profiling) {
+    //             t2 = std::chrono::high_resolution_clock::now();
+    //             metrics->read_locations[0][thread_id].emplace_back(OPTION_REMOTE);
+    //             metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
+    //         }
+    //         return;
+    //     } else if (profiling) {
+    //         // Track unsuccesful remote fetches as well
+    //         metrics->read_locations[0][thread_id].emplace_back(-1);
+    //         metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
+    //     }
+    // }
     if (option_order[0] == OPTION_LOCAL || (option_order[0] == OPTION_REMOTE && option_order[1] == OPTION_LOCAL)) {
         pf_backends[local_storage_level - 1]->fetch(file_id, dst);
         if (profiling) {
@@ -302,11 +328,21 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
             metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
         }
     } else {
-        int planned_storage_level = metadata_store->get_planned_storage_level(file_id);
+        int planned_storage_level;
+        if (eviction_policy == 0) {
+            planned_storage_level = metadata_store->get_planned_storage_level(file_id);
+        } else {
+            planned_storage_level = 1;
+        }
         if (planned_storage_level != -1) {
           // File is meant to be cached, but we are ahead of the prefetcher.
           // Use the current thread to help out.
-          pf_backends[planned_storage_level - 1]->fetch_and_cache(file_id, dst);
+          if (eviction_policy == 0) {
+            pf_backends[planned_storage_level - 1]->fetch_and_cache(file_id, dst);
+          } else {
+            printf("rank %d call fetch_and_rm_cache %d\n", node_id, file_id);
+            pf_backends[planned_storage_level - 1]->fetch_and_rm_cache(file_id, dst);
+          }
         } else {
           backend->fetch(file_id, dst);
         }

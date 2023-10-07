@@ -125,10 +125,12 @@ void DistributedManager::distribute_prefetch_strings(std::vector<int>* local_pre
     auto prev_end = local_prefetch_string->begin();
     // Store number of elements per storage class in send_data
     send_data[global_max_size] = storage_class_ends->size();
+    // create send data (containing samples prefetched into each storage class & metadata)
     for (unsigned long i = 0; i < storage_class_ends->size(); i++) {
         send_data[global_max_size + i + 1] = std::distance(prev_end, (*storage_class_ends)[i]);
         prev_end = (*storage_class_ends)[i];
     }
+    // use all gather to gather info of prefetched samples of each process
     MPI_Datatype arr_type;
     MPI_Type_contiguous(arr_size, MPI_INT, &arr_type);
     MPI_Type_commit(&arr_type);
@@ -146,8 +148,10 @@ void DistributedManager::parse_received_prefetch_data(int* rcv_data, int arr_siz
             for (int j = offset + global_max_size + 1; j < offset + global_max_size + 1 + used_storage_classes; j++) {
                 elems_per_storage_class.push_back(rcv_data[j]);
             }
+            // go through the prefetched files id of process i follow the order of storage classes
             for (unsigned long j = 0; j < elems_per_storage_class.size(); j++) {
                 int storage_class_elems = elems_per_storage_class[j];
+                // go through samples prefetched by process i for each storage class
                 for (int k = offset; k < offset + storage_class_elems; k++) {
                     int file_id = rcv_data[k];
                     struct FileAvailability file_avail{};
@@ -155,6 +159,7 @@ void DistributedManager::parse_received_prefetch_data(int* rcv_data, int arr_siz
                     file_avail.offset = k - offset;
                     file_avail.storage_class = j + 1;
                     if (file_availability.count(file_id) > 0) {
+                        // save the file avail info (dictionary with <file_id, info>) with smaller storage class
                         if (file_avail.storage_class < file_availability[file_id].storage_class ||
                         (file_avail.storage_class == file_availability[file_id].storage_class && file_avail.offset < file_availability[file_id].offset)) {
                             file_availability[file_id] = file_avail;

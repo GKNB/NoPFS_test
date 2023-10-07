@@ -16,7 +16,9 @@ public:
             int epochs,
             int distr_scheme,
             bool drop_last_batch,
-            int seed);
+            int seed, 
+            int node_id,
+            int eviction_policy);
 
     void get_node_access_string(int node_id, std::vector<int>& access_string);
 
@@ -30,6 +32,10 @@ public:
 
     int get_node_local_batch_size();
 
+    void get_fp(std::unordered_map<int, int>& fpmap);
+
+    int node_id;
+
 private:
     std::default_random_engine random_engine;
     std::vector<int> access_sequence;
@@ -40,6 +46,8 @@ private:
     int distr_scheme;
     int node_local_batch_size;
     int batch_no;
+    int partial_shuffle_size;
+    int eviction_policy;
 
 
   void shuffle_sequence(std::vector<int>& vec);
@@ -50,7 +58,7 @@ private:
 
   void get_node_access_string_for_seq(std::vector<int>& seq, int node_id, std::vector<int>& access_string);
 
-  void get_first_accesses(std::vector<int>& first_accesses, int node_id, int lookahead);
+  void get_first_accesses(std::vector<int>& first_accesses, int node_id, int lookahead, std::vector<int>& access_freq);
 
 };
 

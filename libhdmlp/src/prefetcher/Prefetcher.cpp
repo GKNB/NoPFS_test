@@ -28,8 +28,14 @@ Prefetcher::Prefetcher(const std::wstring& dataset_path, const std::wstring& con
     if (seed == 0) {
         seed = distr_manager->generate_and_broadcast_seed();
     }
-    sampler = new Sampler(backend, n, batch_size, epochs, distr_scheme, drop_last_batch, seed);
+
+    this->eviction_policy = 1;
+
+    sampler = new Sampler(backend, n, batch_size, epochs, distr_scheme, drop_last_batch, seed, node_id, eviction_policy);
+    // calculate what samples should be cached by this process
     sampler->get_prefetch_string(node_id, config_capacities, prefetch_string, storage_class_ends, true);
+    // distribute the sequence of prefetched samples with allgather to all other process
+    // collect sample availability info
     distr_manager->distribute_prefetch_strings(&prefetch_string, &storage_class_ends, config_no_threads.size());
     if (transform_len > 0) {
         transform_pipeline = new TransformPipeline*[config_no_threads[0]];
@@ -38,8 +44,11 @@ Prefetcher::Prefetcher(const std::wstring& dataset_path, const std::wstring& con
         }
     }
     this->collate_data = collate_data;
+
     init_threads();
+    // printf("after init_threads\n");
     init_distr_threads();
+    // printf("after init_distr_threads\n");
 }
 
 void Prefetcher::init_config(const std::wstring& path) {
@@ -86,13 +95,18 @@ void Prefetcher::init_threads() {
         std::vector<std::thread> storage_class_threads;
         for (int k = 0; k < no_storage_class_threads; k++) {
             if (j == 0) {
+                // printf("before initing staging buffer node_id %d j %d k %d\n", node_id, j, k);
                 if (k == 0) {
+                    // printf("init staging buffer node_id %d j %d k %d\n", node_id, j, k);
                     unsigned long long int staging_buffer_capacity = config_capacities[0];
+                    // printf("node_id %d staging_buffer_capacity %f\n", node_id, staging_buffer_capacity);
                     staging_buffer = new char[staging_buffer_capacity];
+                    // printf("node_id %d init staging_buffer\n", node_id);
                     int transform_output_size = 0;
                     if (transform_pipeline != nullptr) {
                         transform_output_size = transform_pipeline[0]->get_output_size();
                     }
+                    // printf("node_id %d before init sbf\n", node_id);
                     sbf = new StagingBufferPrefetcher(staging_buffer,
                                                       staging_buffer_capacity,
                                                       node_id,
@@ -105,13 +119,16 @@ void Prefetcher::init_threads() {
                                                       transform_pipeline,
                                                       transform_output_size,
                                                       metrics,
-                                                      collate_data);
+                                                      collate_data,
+                                                      eviction_policy);
                     largest_label_size = sbf->largest_label_size;
                 }
                 std::thread thread(&StagingBufferPrefetcher::prefetch, std::ref(*sbf), k);
                 storage_class_threads.push_back(std::move(thread));
             } else {
+                // printf("before initing memory pf node_id %d j %d k %d\n", node_id, j, k);
                 if (k == 0) {
+                    // printf("init memory pf node_id %d j %d k %d\n", node_id, j, k);
                     std::vector<int>::iterator prefetch_start;
                     if (j == 1) {
                         prefetch_start = prefetch_string.begin();
@@ -129,11 +146,15 @@ void Prefetcher::init_threads() {
                                                                              j,
                                                                              job_id,
                                                                              node_id,
-                                                                             metrics);
+                                                                             metrics,
+                                                                             eviction_policy,
+                                                                             sampler);
                     pf_backends[j - 1] = pf;
                 }
-                std::thread thread(&PrefetcherBackend::prefetch, std::ref(*pf_backends[j - 1]), k, j);
-                storage_class_threads.push_back(std::move(thread));
+                if (eviction_policy == 0) {
+                    std::thread thread(&PrefetcherBackend::prefetch, std::ref(*pf_backends[j - 1]), k, j);
+                    storage_class_threads.push_back(std::move(thread));
+                }
             }
         }
         threads[j] = std::move(storage_class_threads);

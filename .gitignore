@@ -5,3 +5,7 @@ build/
 dist/
 hdmlp.egg-info/
 MANIFEST
+libhdmlp/CMakeCache.txt
+libhdmlp/CMakeFiles/
+libhdmlp/Makefile
+libhdmlp/cmake_install.cmake

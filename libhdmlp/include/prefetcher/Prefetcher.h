@@ -72,6 +72,8 @@ private:
     void init_threads();
 
     void init_distr_threads();
+
+    int eviction_policy;
 };
 
 

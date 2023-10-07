@@ -8,7 +8,7 @@ import numpy as np
 
 class Job:
 
-    DISTR_SCHEMES = {'uniform': 1}
+    DISTR_SCHEMES = {'uniform': 1, 'local': 2, 'partial': 3}
 
     def __init__(self,
                  dataset_path: str,
@@ -127,6 +127,7 @@ class Job:
             fixed_label_len=None):
         labels = []
         file_end = self.hdmlp_lib.get_next_file_end(self.job_id)
+        print(f'after get file_end', file_end, ' buffer_offset ', self.buffer_offset)
         if file_end < self.buffer_offset:
             self.buffer_offset = 0
         self.label_distance = self.hdmlp_lib.get_label_distance(self.job_id)
@@ -143,6 +144,7 @@ class Job:
             else:
                 label_offset += self.label_distance - 1
             if is_string_label:
+                print(f'before get label label_offset ', label_offset, 'buffer_offset ', self.buffer_offset)
                 label = self.buffer_p[self.buffer_offset + prev_label_offset:self.buffer_offset + label_offset]
                 if label[-1] == 0:
                     label = label[:label.find(0)]
@@ -152,9 +154,12 @@ class Job:
                                               label_shape)
                 labels.append(label)
             label_offset += 1
+            # print(f'after get label ', label.shape)
         if decode_as_np_array:
+            print(f'before get file label_offset ', label_offset, 'buffer_offset ', self.buffer_offset)
             file = np.ctypeslib.as_array(ctypes.cast(ctypes.cast(self.buffer_p, ctypes.c_void_p).value + self.buffer_offset + label_offset, ctypes.POINTER(np_array_type)),
                                          np_array_shape)
+            print(f'after get file ', file.shape)
         else:
             file = self.buffer_p[self.buffer_offset + label_offset:file_end]
         self.buffer_offset = file_end

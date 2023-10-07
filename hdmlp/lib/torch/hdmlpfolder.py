@@ -183,9 +183,11 @@ class HDMLPImageFolder(HDMLPDatasetFolder):
         else:
             w_out, h_out, c_out = self.job.get_transformed_dims()
             if self.chw:
+                print(f'hdmlpimagefolder-getitem-num_iterms', num_items, 'chw ', c_out, h_out, w_out)
                 folder_label, sample = self.job.get(
                     num_items, True, (num_items, c_out, h_out, w_out),
                     ctypes.c_ubyte)
+                print('after get sample')
                 sample = torch.from_numpy(sample)
             else:
                 folder_label, sample = self.job.get(

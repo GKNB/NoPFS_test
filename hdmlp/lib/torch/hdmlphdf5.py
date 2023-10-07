@@ -41,6 +41,7 @@ class HDMLPHDF5(HDMLPVisionDataset):
         self.label_shape = label_shape
         self.job = hdmlp_job
         self.hdmlp_transforms = hdmlp_job.get_transforms()
+        print("HDMLPHDF5 call job setup")
         self.job.setup()
         self.job_destroyed = False
 
@@ -58,7 +59,7 @@ class HDMLPHDF5(HDMLPVisionDataset):
         else:
             w_out, h_out, c_out = self.job.get_transformed_dims()
             label, sample = self.job.get(num_items, True, (num_items, h_out, w_out, c_out), False, self.label_shape)
-            sample = torch.from_numpy(sample)
+            # sample = torch.from_numpy(sample)
         return sample, label
 
     def __len__(self):

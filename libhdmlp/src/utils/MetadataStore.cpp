@@ -1,6 +1,7 @@
 #include "../../include/utils/MetadataStore.h"
 #include <algorithm>
 #include <climits>
+#include <iostream>
 
 
 MetadataStore::MetadataStore(int networkbandwidth_clients, // NOLINT(cppcoreguidelines-pro-type-member-init,hicpp-member-init)
@@ -96,14 +97,20 @@ double MetadataStore::interpolate_map(int key_val, std::map<int, int>* map) {
  * @param options Array with 3 elements, options will be put into this array
  */
 void MetadataStore::get_option_order(int local_storage_level, int remote_storage_level, int* options) {
+    // std::cout << "interp_pfs_bandwidth / n " << interp_pfs_bandwidth / n << "networkbandwidth_filesystem " << networkbandwidth_filesystem << std::endl;
     double pfs_speed = std::min(interp_pfs_bandwidth / n, networkbandwidth_filesystem);
+    // std::cout << "pfs_speed " << pfs_speed << std::endl;
     double local_speed = 0.0;
     double remote_speed = 0.0;
     if (local_storage_level != 0) {
         local_speed = interp_storage_level_bandwidths[local_storage_level];
+        // std::cout << "local_speed " << local_speed << std::endl;
     }
     if (remote_storage_level != 0) {
+        // std::cout << "networkbandwidth_clients " << networkbandwidth_clients << std::endl;
+        // std::cout << "interp_storage_level_bandwidth[remote] " << interp_storage_level_bandwidths[remote_storage_level] << std::endl;
         remote_speed = std::min(interp_storage_level_bandwidths[remote_storage_level], networkbandwidth_clients);
+        // std::cout << "remote_speed " << remote_speed << std::endl;
     }
     double speeds[] = {pfs_speed, remote_speed, local_speed};
     options[0] = 0;
@@ -116,4 +123,11 @@ void MetadataStore::get_option_order(int local_storage_level, int remote_storage
         }
         return speeds[a] > speeds[b];
     });
+    // std::cout << "pfs_speed " << speeds[0] << "remote_speed " << speeds[1] << "local_speed " << speeds[2] << std::endl;
+    // std::cout << "get option order " << options[0] << " " << options[1] << " " << options[2] << std::endl;
+}
+
+void MetadataStore::rm_cached_file(int file_id) {
+    std::lock_guard<std::shared_timed_mutex> writer_lock(file_locations_mutex);
+    file_locations.erase(file_id);
 }

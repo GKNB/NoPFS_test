@@ -13,7 +13,7 @@ import io
 
 import torch
 import torchvision
-# import apex
+import apex
 import numpy as np
 import PIL
 
@@ -204,7 +204,7 @@ class AverageTrackerDevice:
     def reset(self):
         """Clear the tracker."""
         self.data = torch.empty(self.n, device=self.device)
-        self.counts = torch.empty(self.n, device='cpu', pin_memory=False)
+        self.counts = torch.empty(self.n, device='cpu', pin_memory=True)
         self.cur_count = 0
         # For caching results.
         self.last_allreduce_count = None
@@ -248,58 +248,38 @@ def get_num_gpus():
 
 def get_local_rank(required=False):
     """Get local rank from environment."""
-    # if 'MV2_COMM_WORLD_LOCAL_RANK' in os.environ:
-    #     return int(os.environ['MV2_COMM_WORLD_LOCAL_RANK'])
-    # if 'OMPI_COMM_WORLD_LOCAL_RANK' in os.environ:
-    #     return int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
-    # if 'SLURM_LOCALID' in os.environ:
-    #     return int(os.environ['SLURM_LOCALID'])
-    # if required:
-    #     raise RuntimeError('Could not get local rank')
-    # return 0
-    if not (torch.distributed.is_available() and torch.distributed.is_initialized()):
-        return 0
-    
-    #number of GPUs per node
-    if torch.cuda.is_available():
-        local_rank = torch.distributed.get_rank() % torch.cuda.device_count()
-    else:
-        local_rank = 0
-        
-    return local_rank
+    if 'MV2_COMM_WORLD_LOCAL_RANK' in os.environ:
+        return int(os.environ['MV2_COMM_WORLD_LOCAL_RANK'])
+    if 'OMPI_COMM_WORLD_LOCAL_RANK' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_LOCAL_RANK'])
+    if 'SLURM_LOCALID' in os.environ:
+        return int(os.environ['SLURM_LOCALID'])
+    if required:
+        raise RuntimeError('Could not get local rank')
+    return 0
 
 
 def get_local_size(required=False):
     """Get local size from environment."""
-    # if 'MV2_COMM_WORLD_LOCAL_SIZE' in os.environ:
-    #     return int(os.environ['MV2_COMM_WORLD_LOCAL_SIZE'])
-    # if 'OMPI_COMM_WORLD_LOCAL_SIZE' in os.environ:
-    #     return int(os.environ['OMPI_COMM_WORLD_LOCAL_SIZE'])
-    # if 'SLURM_NTASKS_PER_NODE' in os.environ:
-    #     return int(os.environ['SLURM_NTASKS_PER_NODE'])
-    # if required:
-    #     raise RuntimeError('Could not get local size')
-    # return 1
-    if not (torch.distributed.is_available() and torch.distributed.is_initialized()):
-        return 1
-    if torch.cuda.is_available():
-        local_size = torch.cuda.device_count()
-    else:
-        local_size = 1
-        
-    return local_size
+    if 'MV2_COMM_WORLD_LOCAL_SIZE' in os.environ:
+        return int(os.environ['MV2_COMM_WORLD_LOCAL_SIZE'])
+    if 'OMPI_COMM_WORLD_LOCAL_SIZE' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_LOCAL_SIZE'])
+    if 'SLURM_NTASKS_PER_NODE' in os.environ:
+        return int(os.environ['SLURM_NTASKS_PER_NODE'])
+    if required:
+        raise RuntimeError('Could not get local size')
+    return 1
 
 
 def get_world_rank(required=False):
     """Get rank in world from environment."""
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        return torch.distributed.get_rank()
-    # if 'MV2_COMM_WORLD_RANK' in os.environ:
-    #     return int(os.environ['MV2_COMM_WORLD_RANK'])
-    # if 'OMPI_COMM_WORLD_RANK' in os.environ:
-    #     return int(os.environ['OMPI_COMM_WORLD_RANK'])
-    # if 'SLURM_PROCID' in os.environ:
-    #     return int(os.environ['SLURM_PROCID'])
+    if 'MV2_COMM_WORLD_RANK' in os.environ:
+        return int(os.environ['MV2_COMM_WORLD_RANK'])
+    if 'OMPI_COMM_WORLD_RANK' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_RANK'])
+    if 'SLURM_PROCID' in os.environ:
+        return int(os.environ['SLURM_PROCID'])
     if required:
         raise RuntimeError('Could not get world rank')
     return 0
@@ -307,20 +287,15 @@ def get_world_rank(required=False):
 
 def get_world_size(required=False):
     """Get world size from environment."""
-    # if 'MV2_COMM_WORLD_SIZE' in os.environ:
-    #     return int(os.environ['MV2_COMM_WORLD_SIZE'])
-    # if 'OMPI_COMM_WORLD_SIZE' in os.environ:
-    #     return int(os.environ['OMPI_COMM_WORLD_SIZE'])
-    # if 'SLURM_NTASKS' in os.environ:
-    #     return int(os.environ['SLURM_NTASKS'])
-    # if required:
-    #     raise RuntimeError('Could not get world size')
-    # return 1
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        size = torch.distributed.get_world_size()
-    else:
-        size = 1
-    return size
+    if 'MV2_COMM_WORLD_SIZE' in os.environ:
+        return int(os.environ['MV2_COMM_WORLD_SIZE'])
+    if 'OMPI_COMM_WORLD_SIZE' in os.environ:
+        return int(os.environ['OMPI_COMM_WORLD_SIZE'])
+    if 'SLURM_NTASKS' in os.environ:
+        return int(os.environ['SLURM_NTASKS'])
+    if required:
+        raise RuntimeError('Could not get world size')
+    return 1
 
 def find_free_port():
     import socket
@@ -331,10 +306,10 @@ def find_free_port():
 
 def initialize_dist(init_file, rendezvous='file'):
     """Initialize PyTorch distributed backend."""
-    # torch.cuda.init()
-    # torch.cuda.set_device(get_local_rank())
+    torch.cuda.init()
+    torch.cuda.set_device(get_local_rank())
 
-    # init_file = os.path.abspath(init_file)
+    init_file = os.path.abspath(init_file)
 
     if rendezvous == 'tcp':
         dist_url = None
@@ -359,64 +334,30 @@ def initialize_dist(init_file, rendezvous='file'):
         torch.distributed.init_process_group(
             backend='nccl', init_method=f'file://{init_file}',
             rank=get_world_rank(), world_size=get_world_size())
-        
-    elif rendezvous == 'gloo':
-        if "MASTER_ADDR" not in os.environ:
-            # check if OpenMPI is used
-            if "PMIX_SERVER_URI2" in os.environ:
-                addr = os.environ["PMIX_SERVER_URI2"]
-                addr = addr.split("//")[1].split(":")[0]
-                os.environ["MASTER_ADDR"] = addr
-            else:
-                os.environ['MASTER_ADDR'] = "localhost"
-
-        # Use the default pytorch port
-        if "MASTER_PORT" not in os.environ:
-            os.environ["MASTER_PORT"] = "29507"
-
-        # obtain WORLD_SIZE
-        if "WORLD_SIZE" not in os.environ:
-            # check if OpenMPI is used
-            if "OMPI_COMM_WORLD_SIZE" in os.environ:
-                world_size = os.environ["OMPI_COMM_WORLD_SIZE"]
-            elif "PMI_SIZE" in os.environ:
-                world_size = os.environ["PMI_SIZE"]
-            elif MPI.Is_initialized():
-                world_size = MPI.COMM_WORLD.Get_size()
-            else:
-                world_size = 1
-            os.environ["WORLD_SIZE"] = str(world_size)
-
-        # obtain RANK
-        if "RANK" not in os.environ:
-            # check if OpenMPI is used
-            if "OMPI_COMM_WORLD_RANK" in os.environ:
-                rank = os.environ["OMPI_COMM_WORLD_RANK"]
-            elif "PMI_RANK" in os.environ:
-                rank = os.environ["PMI_RANK"]
-            elif MPI.Is_initialized():
-                rank = MPI.COMM_WORLD.Get_rank()
-            else:
-                rank = 0
-            os.environ["RANK"] = str(rank)
-
-        # Initialize DDP module
-        torch.distributed.init_process_group(backend = "gloo", init_method='env://')
+    elif rendezvous == 'pm-gpu':
+        rank = int(os.getenv("PMI_RANK"))
+        world_size = int(os.getenv("SLURM_NTASKS"))
+        address = os.getenv("SLURM_LAUNCH_NODE_IPADDR")
+        port = "29500"
+        os.environ["MASTER_ADDR"] = address
+        os.environ["MASTER_PORT"] = port
+                                                
+        #init DDP
+        torch.distributed.init_process_group(backend = "nccl",
+                                rank = rank,
+                                world_size = world_size)
     else:
         raise NotImplementedError(f'Unrecognized scheme "{rendezvous}"')
 
     torch.distributed.barrier()
     # Ensure the init file is removed.
-    # if get_world_rank() == 0 and os.path.exists(init_file):
-    #     os.unlink(init_file)
+    if get_world_rank() == 0 and os.path.exists(init_file):
+        os.unlink(init_file)
 
 
 def get_cuda_device():
     """Get this rank's CUDA device."""
-    if torch.cuda.is_available():
-        return torch.device(f'cuda:{get_local_rank()}')
-    else: 
-        return torch.device("cpu")
+    return torch.device(f'cuda:{get_local_rank()}')
 
 
 def get_job_id():
@@ -425,7 +366,7 @@ def get_job_id():
         return os.environ['SLURM_JOBID']
     if 'LSB_JOBID' in os.environ:
         return os.environ['LSB_JOBID']
-    return 1111
+    return None
 
 
 def allreduce_tensor(t):
@@ -495,10 +436,8 @@ class PrefetchTransform:
     """
 
     def __init__(self, mean, stdev):
-        # self.mean = torch.Tensor([x*255 for x in mean]).cuda().view(1, 3, 1, 1)
-        # self.stdev = torch.Tensor([x*255 for x in stdev]).cuda().view(1, 3, 1, 1)
-        self.mean = torch.Tensor([x*255 for x in mean]).view(1, 3, 1, 1)
-        self.stdev = torch.Tensor([x*255 for x in stdev]).view(1, 3, 1, 1)
+        self.mean = torch.Tensor([x*255 for x in mean]).cuda().view(1, 3, 1, 1)
+        self.stdev = torch.Tensor([x*255 for x in stdev]).cuda().view(1, 3, 1, 1)
 
     def __call__(self, img):
         return _mean_stdev_impl(img, self.mean, self.stdev)
@@ -669,7 +608,7 @@ def fast_collate(memory_format, batch, pin=False):
         nump_array = np.asarray(img, dtype=np.uint8)
         if nump_array.ndim < 3:
             nump_array = np.expand_dims(nump_array, axis=-1)
-        # nump_array = np.rollaxis(nump_array, 2)
+        nump_array = np.rollaxis(nump_array, 2)
         # Suppress warnings.
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -803,35 +742,35 @@ def train(args, train_loader, net, scaler, criterion, optimizer,
         else:
             samples, targets = data
 
-        samples = samples.to(get_cuda_device(), non_blocking=True)
-        targets = targets.to(get_cuda_device(), non_blocking=True)
-        if args.hdmlp and args.no_prefetch:
-            samples = samples.float()
-            if transform is not None:
-                samples = transform(samples)
+        # samples = samples.to(get_cuda_device(), non_blocking=True)
+        # targets = targets.to(get_cuda_device(), non_blocking=True)
+        # if args.hdmlp and args.no_prefetch:
+        #     samples = samples.float()
+        #     if transform is not None:
+        #         samples = transform(samples)
 
-        data_times.update(time.perf_counter() - end_time)
+        # data_times.update(time.perf_counter() - end_time)
 
-        with torch.cuda.amp.autocast(enabled=args.fp16):
-            output = net(samples)
-            loss = criterion(output, targets)
+    #     with torch.cuda.amp.autocast(enabled=args.fp16):
+    #         output = net(samples)
+    #         loss = criterion(output, targets)
 
-        losses.update(loss, samples.size(0))
+    #     losses.update(loss, samples.size(0))
 
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
+    #     scaler.scale(loss).backward()
+    #     scaler.step(optimizer)
+    #     scaler.update()
+    #     optimizer.zero_grad()
 
-        batch_times.update(time.perf_counter() - end_time)
-        end_time = time.perf_counter()
+    #     batch_times.update(time.perf_counter() - end_time)
+    #     end_time = time.perf_counter()
 
-        if batch % args.print_freq == 0 and batch != 0:
-            log.log(f'    [{batch}/{len(train_loader)}] '
-                    f'Avg loss: {losses.mean():.5f} '
-                    f'Avg time/batch: {batch_times.mean():.3f} s '
-                    f'Avg data fetch time/batch: {data_times.mean():.3f} s ')
-    log.log(f'    **Train** Loss {losses.mean():.5f}')
+    #     if batch % args.print_freq == 0 and batch != 0:
+    #         log.log(f'    [{batch}/{len(train_loader)}] '
+    #                 f'Avg loss: {losses.mean():.5f} '
+    #                 f'Avg time/batch: {batch_times.mean():.3f} s '
+    #                 f'Avg data fetch time/batch: {data_times.mean():.3f} s ')
+    # log.log(f'    **Train** Loss {losses.mean():.5f}')
     if args.primary and args.save_stats:
         batch_times.save(
             os.path.join(args.output_dir, f'stats_batch_{args.job_id}.csv'))
@@ -854,9 +793,6 @@ def validate(args, validation_loader, net, criterion, log):
             samples = samples.to(get_cuda_device(), non_blocking=True)
             targets = targets.to(get_cuda_device(), non_blocking=True)
 
-            if args.hdmlp and args.no_prefetch:
-                samples = samples.float()
-
             with torch.cuda.amp.autocast(enabled=args.fp16):
                 output = net(samples)
                 loss = criterion(output, targets)
@@ -875,6 +811,9 @@ def main():
     """Manage training."""
     args = get_args()
 
+    # Determine whether this is the primary rank.
+    args.primary = get_world_rank(required=args.dist) == 0
+
     # Seed RNGs.
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -887,18 +826,15 @@ def main():
             raise RuntimeError('No job ID specified')
 
     if args.dist:
-        # if get_local_size() > get_num_gpus():
-        #     raise RuntimeError(
-        #         'Do not use more ranks per node than there are GPUs')
+        if get_local_size() > get_num_gpus():
+            raise RuntimeError(
+                'Do not use more ranks per node than there are GPUs')
 
         initialize_dist(f'./init_{args.job_id}', args.rendezvous)
     else:
         if get_world_size() > 1:
             print('Multiple processes detected, but --dist not passed',
                   flush=True)
-
-    # Determine whether this is the primary rank.
-    args.primary = get_world_rank(required=args.dist) == 0
 
     if not args.no_cudnn_bm:
         torch.backends.cudnn.benchmark = True
@@ -923,33 +859,24 @@ def main():
 
     # Set up the model.
     if args.dataset == 'imagenet':
-        # num_classes = 1000
-        num_classes = 5
+        num_classes = 1000
+        # num_classes = 5
     elif args.dataset == 'imagenet-22k':
         num_classes = 21841
     else:
         raise ValueError('Unknown dataset', args.dataset)
-    net = torchvision.models.resnet50(pretrained=False,
+    net = torchvision.models.resnet50(weights=None,
                                       num_classes=num_classes,
                                       zero_init_residual=True)
-    
-    if torch.cuda.is_available():
-        device = torch.device("cuda", get_local_rank())
-        torch.cuda.set_device(device)
-        torch.backends.cudnn.benchmark = True
-    else:
-        device = torch.device("cpu")
-
     net = net.to(get_cuda_device())
     net = net.to(memory_format=memory_format)
     if args.dist:
         net = torch.nn.parallel.DistributedDataParallel(
             net,
-            device_ids=([device.index] if device.index else None),
-            output_device=device.index,
-            find_unused_parameters=False,
-            bucket_cap_mb=args.bucket_cap,
-            gradient_as_bucket_view=False)
+            device_ids=[get_local_rank()],
+            output_device=get_local_rank(),
+            # find_unused_parameters=True,
+            bucket_cap_mb=args.bucket_cap)
     # Gradient scaler for AMP.
     scaler = torch.cuda.amp.GradScaler(enabled=args.fp16)
     # Loss function.
@@ -958,17 +885,10 @@ def main():
     else:
         criterion = torch.nn.CrossEntropyLoss().to(get_cuda_device())
     # Optimizer.
-    # optimizer = apex.optimizers.FusedSGD(
-    #     group_weight_decay(net, args.decay, ['bn']),
-    #     args.start_lr,
-    #     args.momentum)
-    optimizer = torch.optim.Adam(net.parameters(),
-            lr = args.start_lr,
-            betas = [0.9, 0.999],
-            eps = 1e-6,
-            weight_decay = args.decay)
-
-
+    optimizer = apex.optimizers.FusedSGD(
+        group_weight_decay(net, args.decay, ['bn']),
+        args.start_lr,
+        args.momentum)
     # Set up learning rate schedule.
     scheduler = get_learning_rate_schedule(optimizer, args)
 
@@ -1012,7 +932,7 @@ def main():
 
     data_dir = args.data_dir
     if args.dataset != 'imagenet-22k':
-        data_dir = os.path.join(data_dir, 'train/')
+        data_dir = os.path.join(data_dir, 'train')
 
     if args.hdmlp:
         if args.hdmlp_stats:
@@ -1021,8 +941,8 @@ def main():
         if args.synth_data:
             raise RuntimeError('Synthetic data not supported with HDMLP')
         collate_fn = functools.partial(fast_collate, memory_format,
-                                       pin=False)
-        print("job init")
+                                       pin=True)
+        print("init hdmlp jobs")
         hdmlp_train_job = hdmlp.Job(
             data_dir,
             args.batch_size * get_world_size(),
@@ -1037,28 +957,18 @@ def main():
             seed=args.seed,
             config_path=args.hdmlp_config_path,
             libhdmlp_path=args.hdmlp_lib_path)
-        # hdmlp_train_job = hdmlp.Job(
-        #     data_dir,
-        #     args.batch_size * get_world_size(),
-        #     args.epochs,
-        #     'uniform',
-        #     args.drop_last,
-        #     None,
-        #     seed=args.seed,
-        #     config_path=args.hdmlp_config_path,
-        #     libhdmlp_path=args.hdmlp_lib_path)
-        print("train dataset init")
+        print("init train dataset")
         train_dataset = hdmlp.lib.torch.HDMLPImageFolder(
             data_dir,
             hdmlp_train_job,
             filelist=os.path.join(args.data_dir, 'hdmlp_files.pickle'))
-        print("train loader init")
+        print("init train loader")
         train_loader = hdmlp.lib.torch.HDMLPDataLoader(
             train_dataset, collate_fn=collate_fn)
         if not args.no_eval:
             # TODO: Update to use faster HDMLP pipeline.
             hdmlp_validation_job = hdmlp.Job(
-                os.path.join(args.data_dir, 'val/'),
+                os.path.join(args.data_dir, 'val'),
                 args.batch_size * get_world_size(),
                 args.epochs,
                 'uniform',
@@ -1067,7 +977,7 @@ def main():
                 config_path=args.hdmlp_config_path,
                 libhdmlp_path=args.hdmlp_lib_path)
             validation_dataset = hdmlp.lib.torch.HDMLPImageFolder(
-                os.path.join(args.data_dir, 'val/'),
+                os.path.join(args.data_dir, 'val'),
                 hdmlp_validation_job,
                 filelist=os.path.join(args.data_dir, 'hdmlp_files.pickle'),
                 transform=validation_transform)
@@ -1077,68 +987,7 @@ def main():
         else:
             num_val_samples = 0
         num_train_samples = len(train_dataset)
-    elif args.dali:
-        train_loader, num_train_samples = setup_dali(args)
-        if not args.no_eval:
-            raise NotImplementedError('DALI is currently only supported for training')
-        num_val_samples = 0
-    else:
-        # Set up loaders.
-        if args.synth_data:
-            if args.dataset == 'imagenet':
-                # num_samples = 1281167
-                num_samples = 5 * 8
-            elif args.dataset == 'imagenet-22k':
-                num_samples = 14197103
-            train_dataset = RandomDataset((3, 256, 256), num_samples,
-                                          pil=not args.no_augmentation,
-                                          transform=train_transform)
-            num_train_samples = len(train_dataset)
-            num_val_samples = 0
-            if not args.no_eval:
-                validation_dataset = RandomDataset(
-                    (3, 256, 256), num_samples,
-                    pil=not args.no_augmentation,
-                    transform=validation_transform)
-                num_val_samples = num_samples
-        else:
-            train_dataset = CachedImageFolder(data_dir, transform=train_transform)
-            num_train_samples = len(train_dataset)
-            num_val_samples = 0
-            if not args.no_eval:
-                validation_dataset = CachedImageFolder(os.path.join(
-                    args.data_dir, 'val/'), transform=validation_transform)
-                num_val_samples = len(validation_dataset)
-        if args.dist:
-            train_sampler = torch.utils.data.distributed.DistributedSampler(
-                train_dataset, num_replicas=get_world_size(),
-                rank=get_world_rank())
-            if not args.no_eval:
-                validation_sampler = torch.utils.data.distributed.DistributedSampler(
-                    validation_dataset, num_replicas=get_world_size(),
-                    rank=get_world_rank())
-        else:
-            train_sampler = torch.utils.data.RandomSampler(train_dataset)
-            if not args.no_eval:
-                validation_sampler = torch.utils.data.RandomSampler(
-                    validation_dataset)
-        if args.no_prefetch or args.no_augmentation:
-            collate_fn = None
-        else:
-            collate_fn = functools.partial(fast_collate, memory_format)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=args.batch_size,
-            num_workers=args.workers, pin_memory=False,
-            sampler=train_sampler, drop_last=args.drop_last,
-            collate_fn=collate_fn)
-        if not args.no_eval:
-            validation_loader = torch.utils.data.DataLoader(
-                validation_dataset, batch_size=args.batch_size,
-                num_workers=args.workers, pin_memory=False,
-                sampler=validation_sampler, drop_last=args.drop_last,
-                collate_fn=collate_fn)
-        else:
-            validation_loader = None
+    
     if not args.no_prefetch:
         if args.dali:
             transforms = None
@@ -1162,7 +1011,7 @@ def main():
 
     # Log training configuration.
     log.log(str(args))
-    # log.log(str(net))
+    log.log(str(net))
     log.log(f'Using {get_world_size()} processes')
     log.log(f'Global batch size is {args.batch_size*get_world_size()}'
             f' ({args.batch_size} per GPU)')
@@ -1224,4 +1073,3 @@ if __name__ == '__main__':
 
     # Skip teardown to avoid hangs
     os._exit(0)
-

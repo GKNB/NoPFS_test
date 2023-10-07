@@ -10,12 +10,16 @@
 #include "../storage/StorageBackend.h"
 #include "../utils/MetadataStore.h"
 #include "../utils/Metrics.h"
+#include "../utils/Sampler.h"
+
+#include <queue>
+#include <iostream>
 
 class MemoryPrefetcher : public PrefetcherBackend {
 public:
     MemoryPrefetcher(std::map<std::string, std::string>& backend_options, std::vector<int>::iterator prefetch_start,
                      std::vector<int>::iterator prefetch_end, unsigned long long int capacity, StorageBackend* backend, MetadataStore* metadata_store,
-                     int storage_level, bool alloc_buffer, Metrics* metrics);
+                     int storage_level, bool alloc_buffer, Metrics* metrics, int eviction_policy, Sampler* sampler);
 
     ~MemoryPrefetcher() override;
 
@@ -30,6 +34,16 @@ public:
     int get_prefetch_offset() override;
 
     bool is_done() override;
+
+    void fetch_and_rm_cache(int file_id, char* dst) override;
+
+    bool cache_file_or_not(int file_id);
+    
+    int evict_last_from_cache();
+
+    void add_file_priority(int file_id);
+
+    void update_file_priority(int file_id);
 
 protected:
     char* buffer;
@@ -49,6 +63,14 @@ protected:
     int storage_level;
     unsigned long long capacity;
     bool buffer_allocated = false;
+
+    std::multimap<int, int, std::greater<int>> pfmap;
+    std::unordered_map<int, int> fpmap;
+    std::queue<int> file_id_cache;
+    int eviction_policy;
+    int buffer_offset;
+    unsigned long max_file_size = 0;
+    Sampler* sampler;
 };
 
 
