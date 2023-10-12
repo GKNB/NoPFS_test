@@ -1,0 +1,16 @@
+Namespace(output_dir='/global/homes/t/tianle/myWork/wkw_cache/work/', job_id='16939556', print_freq=1000000, seed=42, no_eval=True, save_stats=False, data_dir='/pscratch/sd/k/kwf5687/imagenet/mini/', dataset='imagenet', synth_data=False, no_augmentation=False, batch_size=16, epochs=4, drop_last=False, lr=0.1, start_lr=0.1, base_batch=256, momentum=0.9, warmup_epochs=10, decay_epochs=[30, 60, 80], decay_factors=[0.1, 0.1, 0.1], label_smoothing=0.0, decay=0.0001, dist=True, rendezvous='gloo', fp16=False, workers=8, no_cudnn_bm=False, no_prefetch=True, hdmlp=True, hdmlp_config_path='/global/homes/t/tianle/myWork/wkw_cache/NoPFS/libhdmlp/data/perlmutter.cfg', hdmlp_lib_path='/global/homes/t/tianle/myWork/wkw_cache/HDMLP/lib/python3.9/site-packages/hdmlp-0.1-py3.9.egg/libhdmlp.so', hdmlp_stats=False, channels_last=False, dali=False, bucket_cap=25, primary=True)
+Using 1 processes
+Global batch size is 16 (16 per GPU)
+Training data size: 40
+No validation
+Starting learning rate: 0.1 | Target learning rate: 0.1 | Warmup epochs: 10
+Starting training at 2023-10-12 22:31:05
+==>> Epoch=000/004 Elapsed=0 s (avg epoch time:   nan s, current epoch:   nan s) [learning_rate=0.1000]
+    **Train** Loss 33.59740
+==>> Epoch=001/004 Elapsed=2 s (avg epoch time: 2.402 s, current epoch: 2.402 s) [learning_rate=0.0100]
+    **Train** Loss 36.85960
+==>> Epoch=002/004 Elapsed=4 s (avg epoch time: 2.228 s, current epoch: 2.054 s) [learning_rate=0.0200]
+    **Train** Loss 15.39363
+==>> Epoch=003/004 Elapsed=6 s (avg epoch time: 2.137 s, current epoch: 1.954 s) [learning_rate=0.0300]
+    **Train** Loss 7.55721
+==>> Done Elapsed=8 s (avg epoch time: 2.098 s current epoch: 1.983 s)

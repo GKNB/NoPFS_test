@@ -1,0 +1,3 @@
+Having prefetching thread = 4,8 will give completely different error message from thread = 1,2
+The problem is with second epoch, or dataloader trying to handle what happens in the second epoch.
+In the first loop over all 40 files, things are good, everything will be put into the cache. However, in the second loop, one thread is trying to get the file from another thread's cache, which introduce the problem. This is ussally related to file_id 5
