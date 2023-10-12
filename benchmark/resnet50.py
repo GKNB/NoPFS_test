@@ -1022,7 +1022,7 @@ def main():
             raise RuntimeError('Synthetic data not supported with HDMLP')
         collate_fn = functools.partial(fast_collate, memory_format,
                                        pin=False)
-        print("job init")
+        print("job init", flush=True)
         hdmlp_train_job = hdmlp.Job(
             data_dir,
             args.batch_size * get_world_size(),
@@ -1047,12 +1047,12 @@ def main():
         #     seed=args.seed,
         #     config_path=args.hdmlp_config_path,
         #     libhdmlp_path=args.hdmlp_lib_path)
-        print("train dataset init")
+        print("train dataset init", flush=True)
         train_dataset = hdmlp.lib.torch.HDMLPImageFolder(
             data_dir,
             hdmlp_train_job,
             filelist=os.path.join(args.data_dir, 'hdmlp_files.pickle'))
-        print("train loader init")
+        print("train loader init", flush=True)
         train_loader = hdmlp.lib.torch.HDMLPDataLoader(
             train_dataset, collate_fn=collate_fn)
         if not args.no_eval:

@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 3.0)
 project(hdmlp)
 
 set(CMAKE_CXX_STANDARD 14)
-cmake_policy(SET CMP0074 NEW)
 
 find_library(libconfig config++)
 find_package(MPI REQUIRED)

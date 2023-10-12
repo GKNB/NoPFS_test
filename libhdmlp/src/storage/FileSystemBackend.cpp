@@ -156,13 +156,18 @@ unsigned long FileSystemBackend::get_file_size(int file_id) {
  * @param dst
  */
 void FileSystemBackend::fetch(int file_id, char* dst) {
+    printf("TW: FileSystemBackend::fetch start, file_id = %d\n", file_id); fflush(stdout);
     std::string label = label_mappings[file_id];
     std::string rel_path = label + '/' + id_mappings[file_id];
     std::string file_name = abs_path(&rel_path);
     unsigned long entry_size = get_file_size(file_id);
+    printf("TW: FileSystemBackend::fetch, file_id = %d, label = %s, rel_path = %s, file_name = %s, entry_size = %lu\n", file_id, label.c_str(), rel_path.c_str(), file_name.c_str(), entry_size); fflush(stdout);
     FILE* f = fopen(file_name.c_str(), "rb");
+    printf("TW: FileSystemBackend::fetch after open FILE object, file_id = %d\n", file_id); fflush(stdout);
     fread(dst, 1, entry_size, f);
+    printf("TW: FileSystemBackend::fetch after fread, file_id = %d\n", file_id); fflush(stdout);
     fclose(f);
+    printf("TW: FileSystemBackend::fetch end, file_id = %d\n", file_id); fflush(stdout);
 }
 
 int FileSystemBackend::get_label_size(int file_id) {

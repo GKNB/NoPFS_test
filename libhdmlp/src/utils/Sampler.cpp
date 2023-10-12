@@ -84,9 +84,9 @@ void Sampler::shuffle_sequence(std::vector<int>& vec) {
  */
 void Sampler::get_node_access_string(int node_id, std::vector<int>& access_string) {
     get_node_access_string_for_seq(access_sequence, node_id, access_string);
-    std::cout << "rank " << node_id << "access_sequence: "; 
-    for (auto elem : access_sequence)
-        std::cout << elem << " ";
+//    std::cout << "rank " << node_id << "access_sequence: "; 
+//    for (auto elem : access_sequence)
+//        std::cout << elem << " ";
     std::cout << std::endl;
 }
 

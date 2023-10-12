@@ -35,7 +35,7 @@ public:
 
     bool is_done() override;
 
-    void fetch_and_rm_cache(int file_id, char* dst) override;
+    void fetch_and_rm_cache(int file_id, char* dst, int thread_id) override;
 
     bool cache_file_or_not(int file_id);
     
