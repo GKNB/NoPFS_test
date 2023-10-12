@@ -84,10 +84,10 @@ void Sampler::shuffle_sequence(std::vector<int>& vec) {
  */
 void Sampler::get_node_access_string(int node_id, std::vector<int>& access_string) {
     get_node_access_string_for_seq(access_sequence, node_id, access_string);
-//    std::cout << "rank " << node_id << "access_sequence: "; 
-//    for (auto elem : access_sequence)
-//        std::cout << elem << " ";
-    std::cout << std::endl;
+    // std::cout << "rank " << node_id << "access_sequence: "; 
+    // for (auto elem : access_sequence)
+    //     std::cout << elem << " ";
+    // std::cout << std::endl;
 }
 
 void Sampler::get_node_access_string_for_seq(std::vector<int>& seq, int node_id, std::vector<int>& access_string) {
@@ -287,3 +287,26 @@ void Sampler::get_fp(std::unordered_map<int, int>& fpmap) {
       }
     }
 }
+
+void Sampler::store_node_access_string(std::vector<int>& node_access_string, std::unordered_map<int, int>& fpmap) {
+    std::default_random_engine engine_copy = random_engine;
+    std::vector<int> curr_access_seq = access_sequence;
+    int lookahead = epochs;
+    
+    node_access_string.resize(access_sequence.size() / n * lookahead, 0);
+    for (int i = 0; i < lookahead; i++) {
+        std::vector<int> access_string;
+        get_node_access_string_for_seq(curr_access_seq, node_id, access_string);
+        for (size_t j = 0; j < access_string.size(); j++) {
+          node_access_string[i * (access_sequence.size() / n) + j] = access_string[j];
+          if (fpmap.count(access_string[j]) == 0) {
+            fpmap[access_string[j]] = i * (access_sequence.size() / n) + j;
+          }
+        }
+
+        if (i != lookahead - 1) {
+            shuffle_sequence(curr_access_seq);
+        }
+    }
+    random_engine = engine_copy;
+}    

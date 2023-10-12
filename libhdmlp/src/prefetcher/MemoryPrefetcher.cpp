@@ -1,6 +1,5 @@
 #include <cstring>
 #include <thread>
-#include <unistd.h> 
 #include "../../include/prefetcher/MemoryPrefetcher.h"
 #include "../../include/utils/MetadataStore.h"
 
@@ -51,7 +50,7 @@ MemoryPrefetcher::MemoryPrefetcher(std::map<std::string, std::string>& backend_o
               max_file_size = size;
           }
       }
-      std::cout << "memoryPrefetcher--max_file_size " << max_file_size << " capacity " << capacity << std::endl;
+      // std::cout << "memoryPrefetcher--max_file_size " << max_file_size << " capacity " << capacity << std::endl;
       for (int i = 0; i < backend->get_length(); i++) {
         if (buffer_offset + max_file_size >= capacity) break;
         if (i == 0) {
@@ -61,14 +60,23 @@ MemoryPrefetcher::MemoryPrefetcher(std::map<std::string, std::string>& backend_o
         } 
         buffer_offset += max_file_size;
       }
-      std::cout << "memoryPrefetcher--buffer_offset " << buffer_offset << std::endl;
+      // std::cout << "memoryPrefetcher--buffer_offset " << buffer_offset << std::endl;
       buffer_offset = 0;
 
       if (eviction_policy == 2) {
         sampler->get_fp(fpmap);
-        for(auto it = fpmap.begin(); it != fpmap.end(); ++it) {
-          std::cout << "Key: " << it->first << ", Value: " << it->second << '\n';
-        }
+        // for(auto it = fpmap.begin(); it != fpmap.end(); ++it) {
+        //   std::cout << "Key: " << it->first << ", Value: " << it->second << '\n';
+        // }
+      } else if (eviction_policy == 3) {
+        sampler->store_node_access_string(node_access_string, fpmap);
+        // std::cout << "node_access_string: "; 
+        // for (auto elem : node_access_string)
+        //   std::cout << elem << " ";
+        // std::cout << std::endl;
+        // for(auto it = fpmap.begin(); it != fpmap.end(); ++it) {
+        //   std::cout << "Key: " << it->first << ", Value: " << it->second << '\n';
+        // }
       }
     }
 }
@@ -154,16 +162,15 @@ void MemoryPrefetcher::fetch_and_cache(int file_id, char* dst) {
   prefetch_cv.notify_all();
 }
 
-void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id) {
-  printf("TW: in fetch_and_rm_cache call start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
+void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst) {
   bool cache_file = false;
   int next_idx;
-  printf("TW: in fetch_and_rm_cache call before create lock, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   std::unique_lock<std::mutex> lock(prefetcher_mutex);
-  printf("TW: in fetch_and_rm_cache call after create lock, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   if (file_cached.count(file_id) == 0 || file_cached[file_id] == 0) {
+    if (eviction_policy > 1) {
+      update_file_priority(file_id, false);
+    }
     if (file_cached.size() * max_file_size + max_file_size >= capacity) {
-      printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 0 or not there, cache full, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
       // cache is full, decide either to rm & cache or not cache
       cache_file = cache_file_or_not(file_id);
       // std::cout << "cache is full & cache_file is " << cache_file << std::endl;
@@ -173,7 +180,6 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
         // std::cout << "cache is full & file_id is " << file_id << "idx is " << next_idx << std::endl;
       }
     } else {
-      printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 0 or not there, cache not full, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
       // cache is not full, set next_idx to buffer_offset
       cache_file = true;
       next_idx = buffer_offset;
@@ -182,15 +188,12 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
       // std::cout << "cache is not full & file_id is " << file_id << "idx is " << next_idx << std::endl;
     }
   } else if (file_cached[file_id] == 1) {
-    printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 1, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     // A different thread already fetched this file.
     // std::cout << "file_id " << file_id << " is alreday fetched" << std::endl;
     lock.unlock();
-    //TW: currently this is the problem!
     fetch(file_id, dst);
     return;
   } else if (file_cached[file_id] == 2) {
-    printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 2, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     // A different thread is currently caching this file, wait.
     // std::cout << "file_id " << file_id << " is being fetched" << std::endl;
     prefetch_cv.wait(lock, [&]() { return file_cached[file_id] == 1; });
@@ -198,7 +201,6 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
     fetch(file_id, dst);
     return;
   }
-  printf("TW: in fetch_and_rm_cache call first stage finished, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   if (cache_file) {
     // set current file status to prefetching
     file_cached[file_id] = 2;  // Mark we're prefetching it.
@@ -206,27 +208,23 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
   } else {
     lock.unlock();
   }
-  printf("TW: in fetch_and_rm_cache call second stage finished with cache_file = %d, thread_id = %d, file_id = %d\n", cache_file, thread_id, file_id); fflush(stdout);
 
   // Fetch without the lock.
   if (cache_file) {
     // if cache this file
     // int idx = file_id_to_idx[file_id];
-    printf("TW: in fetch_and_rm_cache call, third stage, p1, thread_id = %d, file_id = %d, next_idx = %d, \n", thread_id, file_id, next_idx); fflush(stdout);
+    // std::cout << "file_id " << file_id << " next_idx" << next_idx << std::endl;
     unsigned long long int start = (next_idx == 0) ? 0 : file_ends[next_idx-1];
     // unsigned long long int end = file_ends[next_idx];
     unsigned long long int end = start + backend->get_file_size(file_id);
-    printf("TW: in fetch_and_rm_cache call, third stage, p2, thread_id = %d, file_id = %d, start = %llu, end = %llu\n", thread_id, file_id, start, end); fflush(stdout);
+    // std::cout << "file_id " << file_id << " start " << start << " end " << end << std::endl;
     backend->fetch(file_id, buffer + start);
-    printf("TW: in fetch_and_rm_cache call, third stage, p3, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     // Copy to the destination buffer.
     memcpy(dst, buffer + start, end - start);
-    printf("TW: in fetch_and_rm_cache call, third stage, p4, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   } else {
     // cache is full and this file will not be cached (just add to the sbf)
     backend->fetch(file_id, dst);
   }
-  printf("TW: in fetch_and_rm_cache call third stage finished, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   // Reclaim the lock to mark the file as cached.
   lock.lock();
   if (cache_file) {
@@ -235,37 +233,28 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
     add_file_priority(file_id);
     // std::cout << "file_id " << file_id << " fetch done" << std::endl;
   }
-  printf("TW: in fetch_and_rm_cache call four stage finished, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
   lock.unlock();
   if (cache_file) {
     metadata_store->insert_cached_file(storage_level, file_id);
     prefetch_cv.notify_all();
   }
-  printf("TW: in fetch_and_rm_cache call all finished, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
 }
 
 void MemoryPrefetcher::fetch(int file_id, char* dst) {
     unsigned long len;
     if (eviction_policy > 0) {
-      printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, start with file_id = %d\n", file_id);
       std::unique_lock<std::mutex> lock(prefetcher_mutex);
-      printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, after create lock with file_id = %d\n", file_id);
       if (file_id_to_idx.count(file_id) == 0) {
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is no longer in the cache\n", file_id);
-//        std::cout << "file_id " << file_id << " is no longer in the cache." << std::endl;
+        std::cout << "file_id " << file_id << " is no longer in the cache." << std::endl;
         lock.unlock();
         // return false;
       } else {
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is in the cache, start\n", file_id);
         char* loc = get_location(file_id, &len);
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is in the cache, before memcpy\n", file_id);
         memcpy(dst, loc, len);
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is in the cache, after memcpy\n", file_id);
-        if (eviction_policy > 1)
-          update_file_priority(file_id);
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is in the cache, finish update_file_priority\n", file_id);
+        if (eviction_policy > 1) {
+          update_file_priority(file_id, true);
+        }
         lock.unlock();
-        printf("TW: in MemoryPrefetcher::fetch, policy > 0 branch, file_id = %d is in the cache, finish unlock\n", file_id);
       }
 
     } else {
@@ -305,8 +294,19 @@ bool MemoryPrefetcher::cache_file_or_not(int file_id) {
     case 2: {
       // access_frequency
       auto it = pfmap.rbegin();
-      std::cout << "MP--cache or not? least priority in cache " << it->first << " compare to " << fpmap[file_id] << std::endl;
+      // std::cout << "MP--cache or not? least priority in cache " << it->first  << " (" << it->second << ") compare to " << fpmap[file_id] << std::endl;
       if (it->first < fpmap[file_id]) {
+        return true;
+      } else {
+        return false;
+      }
+      break;
+    }
+    case 3: {
+      // access distance
+      auto it = pfmap.begin();
+      // std::cout << "MP--cache or not? least priority in cache " << it->first  << " (" << it->second << ") compare to " << fpmap[file_id] << std::endl;
+      if (it->first > fpmap[file_id]) {
         return true;
       } else {
         return false;
@@ -328,10 +328,17 @@ int MemoryPrefetcher::evict_last_from_cache() {
       break;
     }
     case 2: {
-      auto it = pfmap.rbegin();
+      auto it = --pfmap.end();
       file_to_evict = it->second;
-      std::cout << "memoryPrefetcher--evict file " << file_to_evict << std::endl;
-      pfmap.erase(it.base());
+      // std::cout << "memoryPrefetcher--evict file " << file_to_evict << std::endl;
+      pfmap.erase(it);
+      break;
+    }
+    case 3: {
+      auto it = pfmap.begin();
+      file_to_evict = it->second;
+      // std::cout << "memoryPrefetcher--evict file " << file_to_evict << std::endl;
+      pfmap.erase(it);
       break;
     }
     default:
@@ -353,9 +360,17 @@ void MemoryPrefetcher::add_file_priority(int file_id) {
       break;
     }
     case 2: {
-      fpmap[file_id] -= 1;
+      // fpmap[file_id] -= 1;
       int priority = fpmap[file_id];
-      std::cout << "memoryPrefetcher--add_file_priority get file_id " << file_id << " 's priority and reduce one " << priority<< std::endl;
+      // std::cout << "memoryPrefetcher--add_file_priority get file_id " << file_id << " 's priority " << priority<< std::endl;
+      pfmap.insert({priority, file_id});
+      break;
+    }
+    case 3: {
+      // int old_priority = fpmap[file_id];
+      // fpmap[file_id] = get_new_access_distance(file_id, old_priority);
+      int priority = fpmap[file_id];
+      // std::cout << "memoryPrefetcher--add_file_priority get file_id " << file_id << " 's new priority " << priority<< std::endl;
       pfmap.insert({priority, file_id});
       break;
     }
@@ -364,43 +379,46 @@ void MemoryPrefetcher::add_file_priority(int file_id) {
   }
 }
 
-void MemoryPrefetcher::update_file_priority(int file_id) {
+void MemoryPrefetcher::update_file_priority(int file_id, bool update_pf) {
+  // update_pf: false  update fpmap only
+  // update_Pf: true   update fpmap and pfmap
   // rm old file_id, priority pair
-  printf("TW: in MemoryPrefetcher::update_file_priority call start, file_id = %d\n", file_id); fflush(stdout);
   auto it1 = fpmap.find(file_id);
-  
-  //TW: test output
-  printf("TW: start printing fpmap\n"); fflush(stdout);
-  for(auto it = fpmap.begin(); it != fpmap.end(); it++)
-  {
-    printf("Key: %d, Values: %d \n", it->first, it->second); fflush(stdout);
-  }
-  printf("TW: finish printing fpmap\n"); fflush(stdout);
-
-  if(it1 == fpmap.end())
-  {
-    printf("TW: in MemoryPrefetcher::update_file_priority call step1, file_id = %d, it1 == fpmap.end()\n", file_id); fflush(stdout);
-  }
-  printf("TW: in MemoryPrefetcher::update_file_priority call step1, file_id = %d\n", file_id); fflush(stdout);
   int priority = it1->second;
-  auto range = pfmap.equal_range(priority);
-  printf("TW: in MemoryPrefetcher::update_file_priority call step2, file_id = %d\n", file_id); fflush(stdout);
   fpmap.erase(it1);
-  printf("TW: in MemoryPrefetcher::update_file_priority call step3, file_id = %d\n", file_id); fflush(stdout);
-  auto it2 = range.first;
-  printf("TW: in MemoryPrefetcher::update_file_priority call step4, file_id = %d\n", file_id); fflush(stdout);
-  while(it2 != range.second)
-  {
-    if(it2->second == file_id)
-      break;
-    it2++;
+
+  if (update_pf) {
+    //rm old pf pair
+    auto range = pfmap.equal_range(priority);
+    auto it2 = range.first;
+    while(it2 != range.second)
+    {
+      if(it2->second == file_id)
+        break;
+      it2++;
+    }
+    pfmap.erase(it2);
   }
-  pfmap.erase(it2);
-  std::cout << "MP--rm file " << file_id << " 's old priority " << priority << std::endl;
-  priority -= 1;
+  // std::cout << "MP--rm file " << file_id << " 's old priority " << priority << std::endl;
+  // get the new priority
+  if (eviction_policy == 2) {
+    priority -= 1;
+  } else if (eviction_policy == 3) {
+    priority = get_new_access_distance(file_id, priority);
+  }
   
   // add new file_id, priority pair
-  pfmap.insert({priority, file_id});
+  if (update_pf) pfmap.insert({priority, file_id});
   fpmap.insert({file_id, priority});
-  std::cout << "MP--add file " << file_id << " 's new priority " << priority << std::endl;
+  // std::cout << "MP--add file " << file_id << " 's new priority " << priority << std::endl;
+}
+
+int MemoryPrefetcher::get_new_access_distance(int file_id, int old_priority) {
+  if ((old_priority + 1) >= node_access_string.size()) return node_access_string.size();
+  for (size_t i = old_priority + 1; i < node_access_string.size(); i++) {
+    if (node_access_string[i] == file_id) {
+      return i;
+    }
+  }
+  return node_access_string.size();
 }

@@ -34,6 +34,8 @@ public:
 
     void get_fp(std::unordered_map<int, int>& fpmap);
 
+    void store_node_access_string(std::vector<int>& node_access_string, std::unordered_map<int, int>& fpmap);
+
     int node_id;
 
 private:
