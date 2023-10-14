@@ -201,16 +201,20 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
             }
             if (!do_transform) {
               if (collate_data) {
+                printf("TW: in StagingBufferPrefetcher::prefetch call, no trans, col_data, before fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
                 fetch(file_id,
                       staging_buffer + local_staging_buffer_pointer + curr_local_batch_size*largest_label_size + batch_offset*file_size,
                       thread_id);
+                printf("TW: in StagingBufferPrefetcher::prefetch call, no trans, col_data, after fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
               } else {
-                std::cout << "TW: in StagingBufferPrefetcher::prefetch call, sbf,  file_id = " << file_id << " before fetch" << std::endl;
+                printf("TW: in StagingBufferPrefetcher::prefetch call, no trans, no col_data, before fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
                 fetch(file_id, staging_buffer + local_staging_buffer_pointer + label_size + 1, thread_id);
-                std::cout << "TW: in StagingBufferPrefetcher::prefetch call, sbf,  file_id = " << file_id << " fetch done" << std::endl;
+                printf("TW: in StagingBufferPrefetcher::prefetch call, no trans, no col_data, after fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
               }
             } else {
+                printf("TW: in StagingBufferPrefetcher::prefetch call, trans, before fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
                 fetch(file_id, transform_buffers[thread_id], thread_id);
+                printf("TW: in StagingBufferPrefetcher::prefetch call, trans, after fetch, file_id = %d, thread_id = %d\n", file_id, thread_id); fflush(stdout);
                 if (profiling) {
                     t1 = std::chrono::high_resolution_clock::now();
                 }
@@ -326,14 +330,16 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
     //     }
     // }
     if (option_order[0] == OPTION_LOCAL || (option_order[0] == OPTION_REMOTE && option_order[1] == OPTION_LOCAL)) {
-        std::cout << "TW: DEBUG: Should not be here 01!" << std::endl;
+        printf("TW: in StagingBufferPrefetcher::fetch call, branch 2xx or 12x, start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
         pf_backends[local_storage_level - 1]->fetch(file_id, dst);
         if (profiling) {
             t2 = std::chrono::high_resolution_clock::now();
             metrics->read_locations[0][thread_id].emplace_back(OPTION_LOCAL);
             metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
         }
+        printf("TW: in StagingBufferPrefetcher::fetch call, branch 2xx or 12x, finish fetch from backend, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     } else {
+        printf("TW: in StagingBufferPrefetcher::fetch call, not in branch 2xx or 12x, start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
         int planned_storage_level;
         if (eviction_policy == 0) {
             std::cout << "TW: DEBUG: Should not be here 02!" << std::endl;
@@ -361,6 +367,7 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
           metrics->read_locations[0][thread_id].emplace_back(OPTION_PFS);
           metrics->read_times[0][thread_id].emplace_back(std::chrono::duration_cast<std::chrono::milliseconds>( t2 - t1 ).count());
         }
+        printf("TW: in StagingBufferPrefetcher::fetch call, not in branch 2xx or 12x, finish, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     }
     printf("TW: in StagingBufferPrefetcher::fetch call end, thread_id = %d\n", thread_id); fflush(stdout);
 }

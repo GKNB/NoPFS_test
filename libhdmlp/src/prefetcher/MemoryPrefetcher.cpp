@@ -173,12 +173,13 @@ void MemoryPrefetcher::fetch_and_rm_cache(int file_id, char* dst, int thread_id)
         // std::cout << "cache is full & file_id is " << file_id << "idx is " << next_idx << std::endl;
       }
     } else {
-      printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 0 or not there, cache not full, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
+      printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 0 or not there, cache not full, start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
       // cache is not full, set next_idx to buffer_offset
       cache_file = true;
       next_idx = buffer_offset;
       buffer_offset += 1;
       file_cached[file_id] = 0;
+      printf("TW: in fetch_and_rm_cache call, outer if with file_cached[file_id] == 0 or not there, cache not full, end, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
       // std::cout << "cache is not full & file_id is " << file_id << "idx is " << next_idx << std::endl;
     }
   } else if (file_cached[file_id] == 1) {
