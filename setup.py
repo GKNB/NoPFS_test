@@ -23,7 +23,7 @@ extdir = os.path.abspath("libhdmlp/")
 builddir = os.path.abspath("libhdmlp/build/")
 if not os.path.exists(builddir):
     os.mkdir(builddir)
-cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + builddir, '-DBUILD_SHARED_LIBS=ON']
+cmake_args = ['-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=' + builddir, '-DBUILD_SHARED_LIBS=ON', '-DCMAKE_BUILD_TYPE=Debug']
 build_args = ['--', '-j4']
 subprocess.check_call(['cmake', extdir] + cmake_args, cwd=extdir)
 subprocess.check_call(['cmake', '--build', '.'] + build_args, cwd=extdir)

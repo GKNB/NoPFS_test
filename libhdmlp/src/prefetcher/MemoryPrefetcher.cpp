@@ -20,7 +20,8 @@ MemoryPrefetcher::MemoryPrefetcher(std::map<std::string, std::string>& backend_o
     this->capacity = capacity;
     this->metrics = metrics;
     num_elems = std::distance(prefetch_start, prefetch_end);
-    file_ends.resize(num_elems, 0);
+    if(eviction_policy == 0)
+      file_ends.resize(num_elems, 0);
     this->eviction_policy = eviction_policy;
     this->sampler = new Sampler(*sampler);
     printf("eviction policy %d \n", eviction_policy);
@@ -52,6 +53,8 @@ MemoryPrefetcher::MemoryPrefetcher(std::map<std::string, std::string>& backend_o
           }
       }
       std::cout << "memoryPrefetcher--max_file_size " << max_file_size << " capacity " << capacity << std::endl;
+      file_ends.resize(std::min(int(capacity / max_file_size), backend->get_length()), 0);
+      printf("TW: DEBUG: backend->get_length() = %d, file_ends.size() = %d\n", backend->get_length(), file_ends.size()); fflush(stdout);
       for (int i = 0; i < backend->get_length(); i++) {
         if (buffer_offset + max_file_size >= capacity) break;
         if (i == 0) {
