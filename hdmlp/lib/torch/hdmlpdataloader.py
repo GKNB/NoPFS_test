@@ -44,12 +44,9 @@ class HDMLPDataLoader(object):
         samples, labels = self.dataset[0:iter_batch_size]
         if isinstance(labels, list):
             # Batch mode
-#            labels = torch.tensor([label for label in labels],
-#                                  dtype=self.label_type, pin_memory=True)
-#            samples = samples.pin_memory()
             labels = torch.tensor([label for label in labels],
                                   dtype=self.label_type, pin_memory=False)
-
+            #samples = samples.pin_memory()
             return samples, labels
         else:
             if self.collate_fn is None:

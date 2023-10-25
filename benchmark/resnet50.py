@@ -803,35 +803,35 @@ def train(args, train_loader, net, scaler, criterion, optimizer,
         else:
             samples, targets = data
 
-        samples = samples.to(get_cuda_device(), non_blocking=True)
-        targets = targets.to(get_cuda_device(), non_blocking=True)
-        if args.hdmlp and args.no_prefetch:
-            samples = samples.float()
-            if transform is not None:
-                samples = transform(samples)
+        # samples = samples.to(get_cuda_device(), non_blocking=True)
+        # targets = targets.to(get_cuda_device(), non_blocking=True)
+        # if args.hdmlp and args.no_prefetch:
+        #     samples = samples.float()
+        #     if transform is not None:
+        #         samples = transform(samples)
 
-        data_times.update(time.perf_counter() - end_time)
+        # data_times.update(time.perf_counter() - end_time)
 
-        with torch.cuda.amp.autocast(enabled=args.fp16):
-            output = net(samples)
-            loss = criterion(output, targets)
+        # with torch.cuda.amp.autocast(enabled=args.fp16):
+        #     output = net(samples)
+        #     loss = criterion(output, targets)
 
-        losses.update(loss, samples.size(0))
+        # losses.update(loss, samples.size(0))
 
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
-        optimizer.zero_grad()
+        # scaler.scale(loss).backward()
+        # scaler.step(optimizer)
+        # scaler.update()
+        # optimizer.zero_grad()
 
-        batch_times.update(time.perf_counter() - end_time)
-        end_time = time.perf_counter()
+        # batch_times.update(time.perf_counter() - end_time)
+        # end_time = time.perf_counter()
 
-        if batch % args.print_freq == 0 and batch != 0:
-            log.log(f'    [{batch}/{len(train_loader)}] '
-                    f'Avg loss: {losses.mean():.5f} '
-                    f'Avg time/batch: {batch_times.mean():.3f} s '
-                    f'Avg data fetch time/batch: {data_times.mean():.3f} s ')
-    log.log(f'    **Train** Loss {losses.mean():.5f}')
+        # if batch % args.print_freq == 0 and batch != 0:
+        #     log.log(f'    [{batch}/{len(train_loader)}] '
+        #             f'Avg loss: {losses.mean():.5f} '
+        #             f'Avg time/batch: {batch_times.mean():.3f} s '
+        #             f'Avg data fetch time/batch: {data_times.mean():.3f} s ')
+    # log.log(f'    **Train** Loss {losses.mean():.5f}')
     if args.primary and args.save_stats:
         batch_times.save(
             os.path.join(args.output_dir, f'stats_batch_{args.job_id}.csv'))
@@ -923,8 +923,8 @@ def main():
 
     # Set up the model.
     if args.dataset == 'imagenet':
-        # num_classes = 1000
-        num_classes = 5
+        num_classes = 1000
+        # num_classes = 5
     elif args.dataset == 'imagenet-22k':
         num_classes = 21841
     else:
@@ -1037,16 +1037,6 @@ def main():
             seed=args.seed,
             config_path=args.hdmlp_config_path,
             libhdmlp_path=args.hdmlp_lib_path)
-        # hdmlp_train_job = hdmlp.Job(
-        #     data_dir,
-        #     args.batch_size * get_world_size(),
-        #     args.epochs,
-        #     'uniform',
-        #     args.drop_last,
-        #     None,
-        #     seed=args.seed,
-        #     config_path=args.hdmlp_config_path,
-        #     libhdmlp_path=args.hdmlp_lib_path)
         print("train dataset init", flush=True)
         train_dataset = hdmlp.lib.torch.HDMLPImageFolder(
             data_dir,

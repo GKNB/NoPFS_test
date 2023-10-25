@@ -57,6 +57,8 @@ void RandomResizedCrop::transform(TransformPipeline* pipeline) {
     }
     cv::Rect roi(j, i, w, h);
     cv::Mat cropped(pipeline->img, roi);
+    printf("TW: DEBUG: before calling cv::resize in RandomResizedCrop.cpp, i = %d, j = %d, w = %d, h = %d, img_height = %d, img_width = %d, \n", i, j, w, h, img_height, img_width); fflush(stdout);
     cv::resize(cropped, cropped, cv::Size(size, size));
+    printf("TW: DEBUG: after calling cv::resize in RandomResizedCrop.cpp\n"); fflush(stdout);
     cropped.copyTo(pipeline->img);
 }

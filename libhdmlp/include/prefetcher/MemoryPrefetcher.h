@@ -35,7 +35,7 @@ public:
 
     bool is_done() override;
 
-    void fetch_and_rm_cache(int file_id, char* dst, int thread_id) override;
+    void fetch_and_rm_cache(int file_id, char* dst) override;
 
     bool cache_file_or_not(int file_id);
     
@@ -43,7 +43,9 @@ public:
 
     void add_file_priority(int file_id);
 
-    void update_file_priority(int file_id);
+    void update_file_priority(int file_id, bool update_pf);
+
+    int get_new_access_distance(int file_id, int old_priority);
 
 protected:
     char* buffer;
@@ -71,6 +73,7 @@ protected:
     int buffer_offset;
     unsigned long max_file_size = 0;
     Sampler* sampler;
+    std::vector<int> node_access_string;
 };
 
 

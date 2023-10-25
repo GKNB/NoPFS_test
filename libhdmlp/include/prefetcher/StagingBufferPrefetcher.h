@@ -65,6 +65,13 @@ private:
     void fetch(int file_id, char* dst, int thread_id);
 
     int eviction_policy;
+    std::mutex fetch_counter_mutex;
+    int num_read = 0;
+    int num_cache_read = 0;
+    int num_pfs_read = 0;
+    int sum_read = 0;
+    int sum_cache_read = 0;
+    int sum_pfs_read = 0;
 };
 
 

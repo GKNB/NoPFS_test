@@ -18,7 +18,7 @@ public:
   virtual void fetch_and_cache(int file_id, char* dst) {
     throw std::runtime_error("Not implemented");
   }
-  virtual void fetch_and_rm_cache(int file_id, char* dst, int thread_id) = 0;
+  virtual void fetch_and_rm_cache(int file_id, char* dst) = 0;
 };
 
 #endif //HDMLP_PREFETCHERBACKEND_H

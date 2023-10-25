@@ -295,8 +295,18 @@ void StagingBufferPrefetcher::prefetch(int thread_id) {
         if (prefetch_batch >= sampler->epochs) {
             break;
         }
-
-        std::cout << "TW: in StagingBufferPrefetcher::prefetch call, outer while loop after break???" << std::endl;
+        // print numbers of read/ read from pfs/ read from the cache
+        if (num_read > 0) {
+            sum_read += num_read;
+            sum_cache_read += num_cache_read;
+            sum_pfs_read += num_pfs_read;
+            printf("process %d (read %d cache %d pfs %d rate c/r %f) sum:(read %d cache %d pfs %d rate c/r %f)\n",
+                    node_id, num_read, num_cache_read, num_pfs_read, (float)num_cache_read/(float)num_read,
+                    sum_read, sum_cache_read, sum_pfs_read, (float)sum_cache_read/(float)sum_read); fflush(stdout);
+            num_read = 0;
+            num_cache_read = 0;
+            num_pfs_read = 0;
+        }
         crit_section_lock.unlock();
     }
 }
@@ -331,6 +341,10 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
     // }
     if (option_order[0] == OPTION_LOCAL || (option_order[0] == OPTION_REMOTE && option_order[1] == OPTION_LOCAL)) {
         printf("TW: in StagingBufferPrefetcher::fetch call, branch 2xx or 12x, start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
+        std::unique_lock<std::mutex> lock(fetch_counter_mutex);
+        num_cache_read += 1;
+        num_read += 1;
+        lock.unlock();
         pf_backends[local_storage_level - 1]->fetch(file_id, dst);
         if (profiling) {
             t2 = std::chrono::high_resolution_clock::now();
@@ -340,6 +354,10 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
         printf("TW: in StagingBufferPrefetcher::fetch call, branch 2xx or 12x, finish fetch from backend, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
     } else {
         printf("TW: in StagingBufferPrefetcher::fetch call, not in branch 2xx or 12x, start, thread_id = %d, file_id = %d\n", thread_id, file_id); fflush(stdout);
+        std::unique_lock<std::mutex> lock(fetch_counter_mutex);
+        num_pfs_read += 1;
+        num_read += 1;
+        lock.unlock();
         int planned_storage_level;
         if (eviction_policy == 0) {
             std::cout << "TW: DEBUG: Should not be here 02!" << std::endl;
@@ -354,11 +372,10 @@ void StagingBufferPrefetcher::fetch(int file_id, char* dst, int thread_id) {
             pf_backends[planned_storage_level - 1]->fetch_and_cache(file_id, dst);
           } else {
             printf("TW: in StagingBufferPrefetcher::fetch call before call fetch_and_rm_cache, node_id = %d, thread_id = %d, file_id = %d\n", node_id, thread_id, file_id); fflush(stdout);
-            pf_backends[planned_storage_level - 1]->fetch_and_rm_cache(file_id, dst, thread_id);
+            pf_backends[planned_storage_level - 1]->fetch_and_rm_cache(file_id, dst);
             printf("TW: in StagingBufferPrefetcher::fetch call after call fetch_and_rm_cache, node_id = %d, thread_id = %d, file_id = %d\n", node_id, thread_id, file_id); fflush(stdout);
           }
         } else {
-          std::cout << "TW: DEBUG: Should not be here 03!" << std::endl;
           backend->fetch(file_id, dst);
         }
         if (profiling) {
